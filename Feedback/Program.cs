@@ -428,13 +428,13 @@ namespace Feedback
 								}
 							});
 
-			switch (msg.Text)
+			if (msg.Text == "/info@" + groupBotName)
 			{
-				case "/info":
-					await client_Group.SendTextMessageAsync(msg.Chat.Id, "Я буду присылать вам запросы клиентов из главного бота. Для принятия запроса нажмите на кнопку. Принять запрос может только один человек." + "\nСписок команд:\n" + "/queue@" + groupBotName + " - список непринятых заявок");
-					break;
-				case "/queue":
-					MySqlConnection connection = new MySqlConnection(connStr_users);	
+				await client_Group.SendTextMessageAsync(msg.Chat.Id, "Я буду присылать вам запросы клиентов из главного бота. Для принятия запроса нажмите на кнопку. Принять запрос может только один человек.");
+			}
+			if (msg.Text == "/appeal@" + groupBotName) 
+			{
+				MySqlConnection connection = new MySqlConnection(connStr_users);	
 					connection.Open();
 					MySqlCommand command = new MySqlCommand("SELECT tb_appeal.id_tb_appeal ,tb_users.fio, tb_appeal.description FROM tb_appeal JOIN tb_users ON tb_appeal.id_tb_users = tb_users.id_tb_users WHERE status = 0", connection);
 					MySqlDataReader reader = command.ExecuteReader();
@@ -449,8 +449,7 @@ namespace Feedback
 					{
 						client_Group.SendTextMessageAsync(msg.Chat.Id, "Необработанных обращений нет");
 					}
-					break;
-			}
+			 }
 		}
 
 		private static async void UserBot(object sender, MessageEventArgs e)
