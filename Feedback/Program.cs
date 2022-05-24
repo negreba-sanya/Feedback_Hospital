@@ -452,6 +452,8 @@ namespace Feedback
 			 }
 		}
 
+		//иван лох
+
 		private static async void UserBot(object sender, MessageEventArgs e)
 		{
 			// локальная переменная для получения информации о сообщениях
