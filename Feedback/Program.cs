@@ -186,9 +186,9 @@ namespace Feedback
 								else
 								{
 
-									if (Convert.ToBoolean(ExecuteScalar("SELECT CAST (CASE WHEN EXISTS(SELECT id_appeal FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + ev.CallbackQuery.From.Id + ") AND status = 1)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
+									if (Convert.ToBoolean(ExecuteScalar("SELECT CAST (CASE WHEN EXISTS(SELECT id_appeal FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + ev.CallbackQuery.From.Id + ") AND status = 4)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
 									{
-										if (Convert.ToBoolean(ExecuteScalar("SELECT CAST (CASE WHEN EXISTS(SELECT id_appeal FROM Appeal WHERE id_employee = 0 AND status = 0)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
+										if (Convert.ToBoolean(ExecuteScalar("SELECT CAST (CASE WHEN EXISTS(SELECT id_appeal FROM Appeal WHERE id_employee = 0 AND status = 6)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
 										{
 											Regex regex = new Regex(@"#[0-9]+");
 											MatchCollection matches = regex.Matches(ev.CallbackQuery.Message.Text);
@@ -197,7 +197,7 @@ namespace Feedback
 											{
 												foreach (Match match in matches)
 												{// находим id обращения и обновляем данные
-													ExecuteNonQuery("UPDATE Appeal SET id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + ev.CallbackQuery.From.Id + "), status = 1 WHERE id_appeal = " + Convert.ToInt32(match.Value.Replace("#", "")) + "");
+													ExecuteNonQuery("UPDATE Appeal SET id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + ev.CallbackQuery.From.Id + "), status = 4, created = '" + DateTime.Now + "' WHERE id_appeal = " + Convert.ToInt32(match.Value.Replace("#", "")) + "");
 
 													await client_Chat.SendTextMessageAsync(ev.CallbackQuery.From.Id, "Можете приступать к работе с человеком по обращению №" + Convert.ToInt32(match.Value.Replace("#", ""))+ "\n\n(" + ev.CallbackQuery.Message.Text+")", replyMarkup: keyboard_for_workers_in_dialog);
 													await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE id_appeal = " + Convert.ToInt32(match.Value.Replace("#", "")) + "")), "Наш сотрудник - " + ev.CallbackQuery.From.FirstName + " поможет решить вашу проблему!", replyMarkup: keyboard_for_users_in_dialog);
@@ -336,20 +336,20 @@ namespace Feedback
 						{
 
 
-							if (!Convert.ToBoolean(ExecuteScalar("SELECT CAST (CASE WHEN EXISTS(SELECT id_appeal FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 1)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
+							if (!Convert.ToBoolean(ExecuteScalar("SELECT CAST (CASE WHEN EXISTS(SELECT id_appeal FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 4)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
 							{
 								try
 								{
 									SqlConnection connection = new SqlConnection(connStr_users);
 									connection.Open();
 
-									string query = "INSERT INTO [Employee message history] (employee_message_id, date, text) VALUES (@employee_message_id, @date, @text)";
+									string query = "INSERT INTO [Employee message history] (id_appeal, date, text) VALUES (@id_appeal, @date, @text)";
 									SqlCommand command = new SqlCommand();
 									command.CommandText = query;
 									command.Connection = connection;
-									command.Parameters.AddWithValue("@employee_message_id", Convert.ToInt32(ExecuteScalar("SELECT id_appeal FROM Appeal WHERE id_employee = (SELECT id_employee FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 1) AND id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 1")));
+									command.Parameters.AddWithValue("@id_appeal", Convert.ToInt32(ExecuteScalar("SELECT id_appeal FROM Appeal WHERE id_employee = (SELECT id_employee FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 4) AND id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 4")));
 									command.Parameters.AddWithValue("@text", msg.Text);
-									command.Parameters.AddWithValue("@date", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+									command.Parameters.AddWithValue("@date", DateTime.Now);
 									command.ExecuteNonQuery();
 
 									connection.Close();
@@ -363,7 +363,7 @@ namespace Feedback
 								{
 									try
 									{
-										await client_User.SendStickerAsync(Convert.ToInt64(ExecuteScalar("SELECT telegram_id FROM Patient WHERE id_patient = (SELECT id_patient FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 1)")), msg.Sticker.FileId);
+										await client_User.SendStickerAsync(Convert.ToInt64(ExecuteScalar("SELECT telegram_id FROM Patient WHERE id_patient = (SELECT id_patient FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 4)")), msg.Sticker.FileId);
 									}
 									catch
 									{
@@ -373,7 +373,7 @@ namespace Feedback
 								}
 								else
 								{
-									await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT telegram_id FROM Patient WHERE id_patient = (SELECT id_patient FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 1)")), "<b>" + msg.Chat.FirstName + "</b>" + "\n" + msg.Text, ParseMode.Html);
+									await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT telegram_id FROM Patient WHERE id_patient = (SELECT id_patient FROM Appeal WHERE id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND status = 4)")), "<b>" + msg.Chat.FirstName + "</b>" + "\n" + msg.Text, ParseMode.Html);
 								}
 							}
 							else
@@ -402,12 +402,20 @@ namespace Feedback
 											},
 							ResizeKeyboard = true
 						};
+						try
+						{
+							await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Patient.id_patient = Appeal.id_patient WHERE Appeal.id_employee= (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4")), "Сотрудник завершил диалог");
+							await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Patient.id_patient = Appeal.id_patient WHERE Appeal.id_employee= (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4")), "Выберите команду:", replyMarkup: keyboardUser);
+							await client_Chat.SendTextMessageAsync(msg.Chat.Id, "Диалог завершен", replyMarkup: new ReplyKeyboardRemove());
 
-						await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Patient.id_patient = Appeal.id_patient WHERE Appeal.id_employee= (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1")), "Сотрудник завершил диалог");
-						await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Patient.id_patient = Appeal.id_patient WHERE Appeal.id_employee= (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1")), "Выберите команду:", replyMarkup: keyboardUser);
-						await client_Chat.SendTextMessageAsync(msg.Chat.Id, "Диалог завершен", replyMarkup: new ReplyKeyboardRemove());
+							ExecuteNonQuery("UPDATE Appeal SET Appeal.status = 5, Appeal.created = '" + DateTime.Now + "' WHERE Appeal.id_appeal = (SELECT * FROM(SELECT Appeal.id_appeal FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4) AS t)");
+						}
+                        catch(Exception error)
+                        {
+							Console.WriteLine(error.Message);
+							await client_Chat.SendTextMessageAsync(msg.Chat.Id, "Извините, произошла ошибка :(");
 
-						ExecuteNonQuery("UPDATE Appeal SET Appeal.status = 2 WHERE Appeal.id_appeal = (SELECT * FROM(SELECT Appeal.id_appeal FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_employee = (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1) AS t)");
+						}
 					}
                     else
                     {
@@ -429,11 +437,11 @@ namespace Feedback
 							ResizeKeyboard = true
 						};
 
-						await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Patient.id_patient = Appeal.id_patient WHERE Appeal.id_employee= (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1")), "Сотрудник завершил диалог");
-						await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Patient.id_patient = Appeal.id_patient WHERE Appeal.id_employee= (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1")), "Выберите команду:", replyMarkup: keyboardUs);
+						await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Patient.id_patient = Appeal.id_patient WHERE Appeal.id_employee= (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4")), "Сотрудник завершил диалог");
+						await client_User.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Patient.telegram_id FROM Appeal JOIN Patient ON Patient.id_patient = Appeal.id_patient WHERE Appeal.id_employee= (SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4")), "Выберите команду:", replyMarkup: keyboardUs);
 						await client_Chat.SendTextMessageAsync(msg.Chat.Id, "Диалог завершен", replyMarkup: new ReplyKeyboardRemove());
-						ExecuteNonQuery("UPDATE Patient SET Patient.blocked = 1 WHERE Patient.id_patient = (SELECT * FROM (SELECT Appeal.id_patient FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_employee = (SELECT * FROM(SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AS t1) AND Appeal.status = 1) AS t)");
-						ExecuteNonQuery("UPDATE Appeal SET Appeal.status = 3 WHERE Appeal.id_appeal = (SELECT * FROM (SELECT Appeal.id_appeal FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_employee = (SELECT * FROM(SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AS t1) AND Appeal.status = 1) AS t)");
+						ExecuteNonQuery("UPDATE Patient SET Patient.blocked = 1 WHERE Patient.id_patient = (SELECT * FROM (SELECT Appeal.id_patient FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_employee = (SELECT * FROM(SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AS t1) AND Appeal.status = 4) AS t)");
+						ExecuteNonQuery("UPDATE Appeal SET Appeal.status = 6, Appeal.created = '" + DateTime.Now + "' WHERE Appeal.id_appeal = (SELECT * FROM (SELECT Appeal.id_appeal FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_employee = (SELECT * FROM(SELECT id_employee FROM Employee WHERE telegram_id = " + msg.Chat.Id + ") AS t1) AND Appeal.status = 4) AS t)");
 						
 
 					}
@@ -465,7 +473,7 @@ namespace Feedback
 			{
 				SqlConnection connection = new SqlConnection(connStr_users);	
 					connection.Open();
-					SqlCommand command = new SqlCommand("SELECT Appeal.id_appeal, Patient.surname, Patient.name, Patient.patronymic, Appeal.description FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE status = 0", connection);
+					SqlCommand command = new SqlCommand("SELECT Appeal.id_appeal, Patient.surname, Patient.name, Patient.patronymic, Appeal.description FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE status = 3", connection);
 					SqlDataReader reader = command.ExecuteReader();
 					while (reader.Read())
 					{
@@ -474,7 +482,7 @@ namespace Feedback
 					connection.Close();
 
 
-					if (Convert.ToInt32(ExecuteScalar("SELECT COUNT(*) FROM(SELECT Appeal.id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE status = 0) AS T")).Equals(0))
+					if (Convert.ToInt32(ExecuteScalar("SELECT COUNT(*) FROM(SELECT Appeal.id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE status = 3) AS T")).Equals(0))
 					{
 						client_Group.SendTextMessageAsync(msg.Chat.Id, "Необработанных обращений нет");
 					}
@@ -622,12 +630,17 @@ namespace Feedback
 					break;
 
 				case "Завершить диалог":
+					try
+					{
+						await client_Chat.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Employee.telegram_id FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4")), "Человек завершил диалог", replyMarkup: new ReplyKeyboardRemove());
+						await client_User.SendTextMessageAsync(msg.Chat.Id, "Выберите тему обращения:", replyMarkup: keyboardStart);
 
-					await client_Chat.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Employee.telegram_id FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1")), "Человек завершил диалог", replyMarkup: new ReplyKeyboardRemove());
-					await client_User.SendTextMessageAsync(msg.Chat.Id, "Выберите тему обращения:", replyMarkup: keyboardStart);
-
-					ExecuteNonQuery("UPDATE Appeal SET Appeal.status = 2 WHERE Appeal.id_appeal = (SELECT * FROM(SELECT Appeal.id_appeal FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1) AS t)");
-
+						ExecuteNonQuery("UPDATE Appeal SET Appeal.status = 5, Appeal.created = '" + DateTime.Now + "' WHERE Appeal.id_appeal = (SELECT * FROM(SELECT Appeal.id_appeal FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4) AS t)");
+					}
+                    catch(Exception error)
+                    {
+						
+					}
 					break;
 
 				default:
@@ -641,17 +654,17 @@ namespace Feedback
 											}
 										});
 
-						if (!Convert.ToBoolean(ExecuteScalar("SELECT CAST (CASE WHEN EXISTS (SELECT Appeal.id_appeal FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1) THEN 1 ELSE 0 END AS BIT)")).Equals(false))
+						if (!Convert.ToBoolean(ExecuteScalar("SELECT CAST (CASE WHEN EXISTS (SELECT Appeal.id_appeal FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4) THEN 1 ELSE 0 END AS BIT)")).Equals(false))
 						{
 							SqlConnection connection = new SqlConnection(connStr_users);
 							connection.Open();
 
-							string query = "INSERT INTO [Patient message history] (id_patient_message_history, date, text) VALUES (@id_patient_message_history, @date, @text)";
+							string query = "INSERT INTO [Patient message history] (id_appeal, date, text) VALUES (@id_appeal, @date, @text)";
 							SqlCommand command_ni = new SqlCommand();
 							command_ni.CommandText = query;
 							command_ni.Connection = connection;
-							command_ni.Parameters.AddWithValue("@id_patient_message_history", Convert.ToInt32(ExecuteScalar("SELECT Appeal.id_appeal FROM Appeal WHERE Appeal.id_patient= (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1")));
-							command_ni.Parameters.AddWithValue("@date", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+							command_ni.Parameters.AddWithValue("@id_appeal", Convert.ToInt32(ExecuteScalar("SELECT Appeal.id_appeal FROM Appeal WHERE Appeal.id_patient= (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4")));
+							command_ni.Parameters.AddWithValue("@date", DateTime.Now);
 							command_ni.Parameters.AddWithValue("@text", msg.Text);
 							command_ni.ExecuteNonQuery();
 
@@ -661,7 +674,7 @@ namespace Feedback
 							{
 								try
 								{
-									client_Chat.SendStickerAsync(Convert.ToInt64(ExecuteScalar("SELECT Employee.telegram_id FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1")), msg.Sticker.FileId);
+									client_Chat.SendStickerAsync(Convert.ToInt64(ExecuteScalar("SELECT Employee.telegram_id FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4")), msg.Sticker.FileId);
 								}
 								catch
 								{
@@ -672,13 +685,13 @@ namespace Feedback
 							else
 							{
 
-								client_Chat.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Employee.telegram_id FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 1")), "<b>" + msg.Chat.FirstName + "</b>" + "\n" + msg.Text, ParseMode.Html);
+								client_Chat.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT Employee.telegram_id FROM Appeal JOIN Employee ON Employee.id_employee = Appeal.id_employee WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND Appeal.status = 4")), "<b>" + msg.Chat.FirstName + "</b>" + "\n" + msg.Text, ParseMode.Html);
 							}
 						}
 						else
 						{
 
-							if (!Convert.ToBoolean(ExecuteScalar("SELECT CAST(CASE WHEN EXISTS(SELECT id_appeal FROM Appeal WHERE id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND status = -2)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
+							if (!Convert.ToBoolean(ExecuteScalar("SELECT CAST(CASE WHEN EXISTS(SELECT id_appeal FROM Appeal WHERE id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND status = 1)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
 							{
 								string[] check_fio = new string[3];
 
@@ -701,7 +714,7 @@ namespace Feedback
 									string[] j = new string[3];
 									j = msg.Text.Split(' ');
 									ExecuteNonQuery("UPDATE Patient SET surname = '" + j[0] + "', name = '" + j[1] + "', patronymic = '" + j[2] + "'  WHERE telegram_id =  " + msg.Chat.Id + "");
-									ExecuteNonQuery("UPDATE Appeal SET status = -1 WHERE id_appeal = (SELECT * FROM (SELECT id_appeal FROM Appeal WHERE id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND status = -2) AS T)");
+									ExecuteNonQuery("UPDATE Appeal SET status = 2, created = '" + DateTime.Now + "' WHERE id_appeal = (SELECT * FROM (SELECT id_appeal FROM Appeal WHERE id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + msg.Chat.Id + ") AND status = 1) AS T)");
 
 									client_User.SendTextMessageAsync(msg.From.Id, "Опишите свою проблему для формирования заявки (одним сообщением)", replyMarkup: new ReplyKeyboardRemove());
 
@@ -714,9 +727,9 @@ namespace Feedback
 							}
 							else
 							{
-								if (Convert.ToBoolean(ExecuteScalar("SELECT CAST(CASE WHEN EXISTS(SELECT id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE telegram_id = " + msg.Chat.Id + " AND status = -1)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
+								if (Convert.ToBoolean(ExecuteScalar("SELECT CAST(CASE WHEN EXISTS(SELECT id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE telegram_id = " + msg.Chat.Id + " AND status = 2)THEN 1 ELSE 0 END AS BIT)")).Equals(false))
 								{
-									client_User.DeleteMessageAsync(chatId: msg.Chat.Id, msg.MessageId);
+									client_User.DeleteMessageAsync(msg.Chat.Id, msg.MessageId);
 								}
 								else
 								{
@@ -737,8 +750,8 @@ namespace Feedback
 									connection.Close();
 
 
-									await client_Group.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT telegram_id FROM [Group] WHERE id_group IS NOT NULL")), "#" + Convert.ToInt32(ExecuteScalar("SELECT id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE telegram_id = " + msg.Chat.Id + " AND status = -1")) + "\nФИО: " + fio[0] + " " + fio[1] + " " + fio[2] + "\n" + "Тема: Качество обслуживания" + "\n" + "Описание: " + msg.Text, replyMarkup: keyboard);
-									ExecuteNonQuery("UPDATE Appeal SET status = 0, description = '" + msg.Text + "' WHERE id_appeal = " + Convert.ToInt32(ExecuteScalar("SELECT id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE telegram_id = " + msg.Chat.Id + " AND status = -1")) + "");
+									await client_Group.SendTextMessageAsync(Convert.ToInt64(ExecuteScalar("SELECT telegram_id FROM [Group] WHERE id_group IS NOT NULL")), "#" + Convert.ToInt32(ExecuteScalar("SELECT id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE telegram_id = " + msg.Chat.Id + " AND status = 2")) + "\nФИО: " + fio[0] + " " + fio[1] + " " + fio[2] + "\n" + "Тема: Качество обслуживания" + "\n" + "Описание: " + msg.Text, replyMarkup: keyboard);
+									ExecuteNonQuery("UPDATE Appeal SET status = 3, created = '" + DateTime.Now + "', description = '" + msg.Text + "' WHERE id_appeal = " + Convert.ToInt32(ExecuteScalar("SELECT id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE telegram_id = " + msg.Chat.Id + " AND status = 2")) + "");
 									client_User.SendTextMessageAsync(msg.From.Id, msg.From.FirstName + ", ожидайте, в ближайшее время с вами свяжется наш сотрудник.", replyMarkup: new ReplyKeyboardRemove());
 								}
 							}
@@ -770,12 +783,12 @@ namespace Feedback
 
 				if (check_fio[0] != "" && check_fio[1] != "" && check_fio[2] != "")
 				{
-					if (Convert.ToBoolean(ExecuteScalar("SELECT CAST(CASE WHEN EXISTS (SELECT Appeal.id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + id + ") AND status = 0 OR status = -1 )THEN 1 ELSE 0 END AS BIT)")).Equals(false))
+					if (Convert.ToBoolean(ExecuteScalar("SELECT CAST(CASE WHEN EXISTS (SELECT Appeal.id_appeal FROM Appeal JOIN Patient ON Appeal.id_patient = Patient.id_patient WHERE Appeal.id_patient = (SELECT id_patient FROM Patient WHERE telegram_id = " + id + ") AND status = 3 OR status = 2 )THEN 1 ELSE 0 END AS BIT)")).Equals(false))
 					{
 						await client_User.SendTextMessageAsync(id, "Опишите свою проблему для формирования заявки (одним сообщением)", replyMarkup: new ReplyKeyboardRemove());
 						
 						
-						ExecuteNonQuery("INSERT INTO Appeal (id_patient, id_subject_appeal, status) VALUES ((SELECT id_patient FROM Patient WHERE telegram_id = " + id + "),'" + topic + "', -1)");
+						ExecuteNonQuery("INSERT INTO Appeal (id_patient, id_subject_appeal, status, created, id_department) VALUES ((SELECT id_patient FROM Patient WHERE telegram_id = " + id + "),'" + topic + "', 2, '"+DateTime.Now+"',1)");
 					}
                     else
                     {
@@ -786,7 +799,7 @@ namespace Feedback
 				}
 				else
 				{
-					ExecuteNonQuery("INSERT INTO Appeal (id_patient, id_subject_appeal, status) VALUES ((SELECT id_patient FROM Patient WHERE telegram_id = " + id + ")," + topic + ", -2)");
+					ExecuteNonQuery("INSERT INTO Appeal (id_patient, id_subject_appeal, status, created) VALUES ((SELECT id_patient FROM Patient WHERE telegram_id = " + id + ")," + topic + ", 1, '" + DateTime.Now + "')");
 					await client_User.SendTextMessageAsync(id, "Укажите ваше ФИО (в формате \"Иванов Иван Иванович\")");
 				}
 				await client_User.DeleteMessageAsync(id, messageid);
@@ -851,7 +864,7 @@ namespace Feedback
 					command_ni.Connection = connection;
 					command_ni.Parameters.AddWithValue("@telegram_id", msg.Chat.Id);
 					command_ni.Parameters.AddWithValue("@telegram_username", msg.Chat.Username ?? (object)DBNull.Value);
-					command_ni.Parameters.AddWithValue("@created", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+					command_ni.Parameters.AddWithValue("@created", DateTime.Now);
 					command_ni.Parameters.AddWithValue("@telegram_first_name", msg.Chat.FirstName ?? (object)DBNull.Value);
 					command_ni.Parameters.AddWithValue("@telegram_second_name", msg.Chat.LastName ?? (object)DBNull.Value);
 					command_ni.Parameters.AddWithValue("@blocked", 0);
